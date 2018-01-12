@@ -11,6 +11,9 @@
       body {
         font-family: Times;
       }
+      a, a:hover {
+        text-decoration: none;
+      }
       .light, .hover-light:hover {
         color: #b6b6b6;
       }
@@ -34,7 +37,18 @@
         display: block;
         margin-top: 3%;
         font-size: 5.5vw;
-        text-decoration: none;
+      }
+      #links {
+        text-align: left;
+        font-size:calc(12px + 3vw);
+        list-style: none;
+        padding: 0;
+      }
+      #links a:hover::after {
+        content: ' <';
+      }
+      .section-title {
+        font-size: 5.5vw;
       }
     </style>
   </head>
@@ -49,6 +63,15 @@
       <a class="dark hover-light" id="contact-me" href="mailto:contact@benl.com.au">
         contact@benl.com.au
       </a>
+      <hr />
+      <section>
+        <div class="section-title dark"><i>I</i> write</div>
+        <ul id="links">
+          <li><a class="dark hover-light" href="#">an article</a></li>
+          <li><a class="dark hover-light" href="#">an article</a></li>
+          <li><a class="dark hover-light" href="#">an article</a></li>
+        </ul>
+      </section>
     </div>
   </body>
 </html>
