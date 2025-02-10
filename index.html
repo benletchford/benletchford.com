@@ -18,21 +18,31 @@
       body {
         height: 100%;
       }
+      /* Fluid base font-size scaling:
+       This scales the base font-size from 12px (on very small screens)
+       up to 20px (on larger screens), with a linear interpolation in between.
+       All typography defined in rem units will scale together. */
+      :root {
+        font-size: clamp(12px, calc(12px + 4 * ((100vw - 320px) / 680)), 20px);
+      }
       body {
         display: flex;
         justify-content: center;
         align-items: center;
         font-family: "Montserrat", sans-serif;
-        background-color: #ffffff;
+        background-color: #fff;
         color: #333;
         text-align: center;
         padding: 20px;
       }
       .container {
         max-width: 600px;
+        width: 100%;
+        padding: 0 10px;
       }
       h1 {
         font-size: 3rem;
+        white-space: nowrap;
         margin-bottom: 0.5rem;
       }
       h2 {
