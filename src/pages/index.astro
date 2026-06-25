@@ -1,0 +1,94 @@
+---
+import { getCollection } from "astro:content";
+import HomeLayout from "@/layouts/HomeLayout.astro";
+import { entryUrl, formatDate, sortByDateDesc, slugify } from "@/lib/content";
+
+const writing = sortByDateDesc(
+  await getCollection("writing", ({ data }) => data.draft !== true),
+);
+const margins = sortByDateDesc(
+  await getCollection("margins", ({ data }) => data.draft !== true),
+);
+
+const featured = writing.find((post) => post.data.featured) ?? writing[0];
+const latest = [
+  ...writing.map((entry) => ({ collection: "writing" as const, entry })),
+  ...margins.map((entry) => ({ collection: "margins" as const, entry })),
+]
+  .sort((a, b) => b.entry.data.date.valueOf() - a.entry.data.date.valueOf())
+  .slice(0, 4);
+const indexSections = ["Software", "Preservation", "AI", "Faith", "Life"];
+---
+
+<HomeLayout>
+  <section class="hero" aria-labelledby="home-title">
+    <h1 id="home-title">Ben Letchford</h1>
+    <p>
+      I build systems, preserve old software, and occasionally write things
+      down before they disappear from my head.
+    </p>
+  </section>
+
+  {featured && (
+    <section class="featured" aria-labelledby="featured-title">
+      <div>
+        <p class="eyebrow">Featured</p>
+        <h2 id="featured-title">
+          <span aria-hidden="true">&sect;</span>
+          <a href={entryUrl("writing", featured)}>{featured.data.title}</a>
+        </h2>
+        <p>{featured.data.description}</p>
+        <a class="read-link" href={entryUrl("writing", featured)}>Read essay &rarr;</a>
+      </div>
+      <figure class="plate">
+        <p class="figure-number">Fig. 01</p>
+        <div class="figure-sketch" aria-hidden="true">
+          <span class="sketch-line line-a"></span>
+          <span class="sketch-line line-b"></span>
+          <span class="sketch-line line-c"></span>
+          <span class="sketch-line line-d"></span>
+          <span class="sketch-line line-e"></span>
+          <span class="sketch-line line-f"></span>
+          <span class="sketch-line line-g"></span>
+          <span class="sketch-circle"></span>
+        </div>
+        <figcaption>
+          Figure 1. A program is a set of instructions, but a system is a world.
+        </figcaption>
+      </figure>
+    </section>
+  )}
+
+  <section class="lower-grid" aria-label="Latest writing and index">
+    <div>
+      <div class="section-heading">
+        <p class="eyebrow">Latest notes</p>
+        <span>No. 02</span>
+      </div>
+      <ol class="note-list">
+        {latest.map(({ collection, entry }, index) => (
+          <li>
+            <span>{String(index + 1).padStart(2, "0")}</span>
+            <a href={entryUrl(collection, entry)}>{entry.data.title}</a>
+            <time datetime={entry.data.date.toISOString()}>{formatDate(entry.data.date)}</time>
+          </li>
+        ))}
+      </ol>
+    </div>
+    <div>
+      <div class="section-heading">
+        <p class="eyebrow">Index</p>
+        <span>No. 03</span>
+      </div>
+      <ol class="index-list">
+        {indexSections.map((section, index) => (
+          <li>
+            <span>{String(index + 1).padStart(2, "0")}</span>
+            <a href={`/writing/#${slugify(section)}`}>{section}</a>
+            <b aria-hidden="true">+</b>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+</HomeLayout>

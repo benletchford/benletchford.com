@@ -1,0 +1,33 @@
+---
+import { render } from "astro:content";
+import { formatDate } from "@/lib/content";
+import BaseLayout from "./BaseLayout.astro";
+
+type Props = {
+  entry: any;
+  collectionLabel?: string;
+};
+
+const { entry, collectionLabel = "Margins" } = Astro.props;
+const { Content } = await render(entry);
+---
+
+<BaseLayout title={entry.data.title} description={entry.data.description}>
+  <main>
+    <article class="essay">
+      <p class="crumb">Ben Letchford / {collectionLabel}</p>
+      <header class="essay-header">
+        <p class="eyebrow">{entry.data.section}</p>
+        <h1><span aria-hidden="true">&sect;</span>{entry.data.title}</h1>
+        <div class="essay-meta">
+          <time datetime={entry.data.date.toISOString()}>{formatDate(entry.data.date)}</time>
+          <span>{entry.data.section}</span>
+        </div>
+      </header>
+      <div class="essay-body">
+        <Content />
+      </div>
+    </article>
+  </main>
+</BaseLayout>
+

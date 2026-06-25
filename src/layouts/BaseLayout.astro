@@ -1,0 +1,66 @@
+---
+import "../styles/global.css";
+import "../styles/typography.css";
+
+type Props = {
+  title?: string;
+  description?: string;
+  image?: string;
+};
+
+const {
+  title = "Ben Letchford",
+  description = "Essays, margins, and project notes from Ben Letchford.",
+  image = "/images/figures/archival-interface.png",
+} = Astro.props;
+
+const pageTitle = title === "Ben Letchford" ? title : `${title} | Ben Letchford`;
+const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
+const imageUrl = new URL(image, Astro.site);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalUrl} />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:image" content={imageUrl} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={imageUrl} />
+    <link rel="alternate" type="application/rss+xml" title="Ben Letchford" href="/rss.xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="site-shell">
+      <header class="site-header" aria-label="Site header">
+        <a class="site-mark" href="/">Ben Letchford</a>
+        <nav class="site-nav" aria-label="Main navigation">
+          <a href="/writing/">Writing</a>
+          <a href="/projects/">Projects</a>
+          <a href="/about/">About</a>
+        </nav>
+      </header>
+      <slot />
+      <footer class="site-footer">
+        <p>&ldquo;Simplicity is prerequisite for reliability.&rdquo; - Edsger Dijkstra</p>
+        <nav aria-label="Footer links">
+          <span>&copy; 2026 Ben Letchford</span>
+        </nav>
+      </footer>
+    </div>
+  </body>
+</html>

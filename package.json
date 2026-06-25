@@ -1,0 +1,31 @@
+{
+  "name": "benletchford.com",
+  "version": "0.1.0",
+  "description": "Static personal publishing site for Ben Letchford.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/benletchford/benletchford.com.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/benletchford/benletchford.com/issues"
+  },
+  "homepage": "https://github.com/benletchford/benletchford.com#readme",
+  "dependencies": {
+    "@astrojs/markdown-remark": "^7.2.0",
+    "@astrojs/mdx": "^7.0.0",
+    "@astrojs/rss": "^4.0.18",
+    "@astrojs/sitemap": "^3.7.3",
+    "astro": "^7.0.2"
+  }
+}

@@ -1,0 +1,37 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { entryUrl, formatDate, sortByDateDesc } from "@/lib/content";
+
+const posts = sortByDateDesc(
+  await getCollection("margins", ({ data }) => data.draft !== true),
+);
+---
+
+<BaseLayout title="Short Margins" description="Fragments, observations, and shorter notes by Ben Letchford.">
+  <main class="archive">
+    <header class="archive-header">
+      <p class="eyebrow">Fragments</p>
+      <h1>Short margins</h1>
+      <p>
+        Smaller observations that do not need to become essays before they can
+        be useful.
+      </p>
+    </header>
+    <section class="archive-block" aria-labelledby="short-margins-title">
+      <h2 id="short-margins-title">Fragments</h2>
+      <ol class="archive-list">
+        {posts.map((post) => (
+          <li>
+            <a href={entryUrl("margins", post)}>
+              <span>{post.data.title}</span>
+              <small>{post.data.description}</small>
+            </a>
+            <time datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
+          </li>
+        ))}
+      </ol>
+    </section>
+  </main>
+</BaseLayout>
+

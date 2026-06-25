@@ -1,0 +1,38 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { entryUrl, formatDate, sortByDateDesc } from "@/lib/content";
+
+const projects = sortByDateDesc(
+  await getCollection("projects", ({ data }) => data.draft !== true),
+);
+---
+
+<BaseLayout title="Projects" description="Systems, preservation tools, experiments, and public work by Ben Letchford.">
+  <main class="archive">
+    <header class="archive-header">
+      <p class="eyebrow">Projects</p>
+      <h1>Systems and tools</h1>
+      <p>
+        Software projects, preservation experiments, and tools that are easiest
+        to understand as working systems rather than isolated repositories.
+      </p>
+    </header>
+
+    <section class="archive-block" aria-labelledby="projects-title">
+      <h2 id="projects-title">Index</h2>
+      <ol class="archive-list project-list">
+        {projects.map((project) => (
+          <li>
+            <a href={entryUrl("projects", project)}>
+              <span>{project.data.title}</span>
+              <small>{project.data.description}</small>
+            </a>
+            <time datetime={project.data.date.toISOString()}>{formatDate(project.data.date)}</time>
+          </li>
+        ))}
+      </ol>
+    </section>
+  </main>
+</BaseLayout>
+

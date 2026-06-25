@@ -1,0 +1,47 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { entryUrl, formatDate, slugify, sortByDateDesc } from "@/lib/content";
+
+const posts = sortByDateDesc(
+  await getCollection("writing", ({ data }) => data.draft !== true),
+);
+
+const sections = posts.reduce<Record<string, typeof posts>>((acc, post) => {
+  acc[post.data.section] = acc[post.data.section] ?? [];
+  acc[post.data.section].push(post);
+  return acc;
+}, {});
+---
+
+<BaseLayout title="Margins" description="Essays and longer notes by Ben Letchford.">
+  <main class="archive">
+    <header class="archive-header">
+      <p class="eyebrow">Writing</p>
+      <h1>Margins</h1>
+      <p>
+        Essays and longer notes about software, preservation, AI, faith, and
+        the parts of a system that survive after the fashion passes.
+      </p>
+    </header>
+
+    {Object.entries(sections).map(([section, entries]) => (
+      <section class="archive-block" id={slugify(section)} aria-labelledby={`${slugify(section)}-title`}>
+        <p class="eyebrow">{section}</p>
+        <h2 id={`${slugify(section)}-title`}>{section}</h2>
+        <ol class="archive-list">
+          {entries.map((post) => (
+            <li>
+              <a href={entryUrl("writing", post)}>
+                <span>{post.data.title}</span>
+                <small>{post.data.description}</small>
+              </a>
+              <time datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
+            </li>
+          ))}
+        </ol>
+      </section>
+    ))}
+  </main>
+</BaseLayout>
+
