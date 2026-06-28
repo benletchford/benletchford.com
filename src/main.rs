@@ -3,6 +3,7 @@ use chrono::{Datelike, Local, NaiveDate};
 use pulldown_cmark::{html, Options, Parser};
 use serde::Deserialize;
 use std::{
+    collections::{HashMap, HashSet},
     env, fs,
     io::{Read, Write},
     net::{TcpListener, TcpStream},
@@ -218,7 +219,7 @@ impl Site {
                     "    <div class=\"entry-row\"><a href=\"{}\">{}</a><span></span><time>{}</time></div>\n",
                     entry.url_path(),
                     escape_html(&entry.title),
-                    entry.date.year()
+                    format_month_year(entry.date)
                 ));
             }
             body.push_str("  </div>\n");
@@ -243,7 +244,7 @@ impl Site {
             body.push_str("</section>\n");
         }
         body.push_str(&format!(
-            "<footer class=\"site-footer\">&copy; {} {}</footer>\n",
+            "<footer class=\"site-footer\"><a href=\"https://github.com/benletchford/benletchford.com\" target=\"_blank\" rel=\"noopener\">&copy; {} {}</a></footer>\n",
             Local::now().year(),
             AUTHOR
         ));
@@ -299,10 +300,10 @@ impl Site {
         body.push_str("    <h2>Abstract</h2>\n");
         body.push_str(&format!("    <p>{}</p>\n", escape_html(&entry.description)));
         body.push_str("  </section>\n");
-        body.push_str(&format!(
-            "  <div class=\"article-body\">{}</div>\n",
-            entry.body_html
-        ));
+        body.push_str("  <div class=\"article-body\">");
+        body.push_str(&entry.body_html);
+        body.push_str(&render_references(&entry.references));
+        body.push_str("</div>\n");
         body.push_str("</article>\n");
 
         render_page(
@@ -420,6 +421,7 @@ struct Entry {
     description: String,
     draft: bool,
     body_html: String,
+    references: Vec<Reference>,
 }
 
 impl Entry {
@@ -443,6 +445,7 @@ struct EntryFrontMatter {
     section: String,
     description: String,
     draft: bool,
+    references: Vec<Reference>,
 }
 
 impl Default for EntryFrontMatter {
@@ -453,8 +456,16 @@ impl Default for EntryFrontMatter {
             section: "Notes".to_string(),
             description: String::new(),
             draft: false,
+            references: Vec::new(),
         }
     }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct Reference {
+    key: String,
+    citation: String,
+    entry: String,
 }
 
 fn load_home(path: &Path) -> Result<Home> {
@@ -502,8 +513,10 @@ fn load_entry(path: &Path, collection_root: &Path, collection: Collection) -> Re
     if front_matter.description.trim().is_empty() {
         bail!("{} is missing a description", path.display());
     }
+    validate_references(path, &front_matter.references)?;
     let date = NaiveDate::parse_from_str(&front_matter.date, "%Y-%m-%d")
         .with_context(|| format!("parsing date for {}", path.display()))?;
+    let markdown = resolve_citations(&markdown, &front_matter.references, path)?;
 
     Ok(Entry {
         collection,
@@ -514,7 +527,154 @@ fn load_entry(path: &Path, collection_root: &Path, collection: Collection) -> Re
         description: front_matter.description,
         draft: front_matter.draft,
         body_html: render_markdown(&markdown),
+        references: front_matter.references,
     })
+}
+
+fn validate_references(path: &Path, references: &[Reference]) -> Result<()> {
+    let mut keys = HashSet::new();
+    for reference in references {
+        if reference.key.trim().is_empty() {
+            bail!("{} has a reference with an empty key", path.display());
+        }
+        if !is_reference_key(&reference.key) {
+            bail!(
+                "{} has an invalid reference key: {}",
+                path.display(),
+                reference.key
+            );
+        }
+        if reference.citation.trim().is_empty() {
+            bail!(
+                "{} has reference {} without citation text",
+                path.display(),
+                reference.key
+            );
+        }
+        if reference.entry.trim().is_empty() {
+            bail!(
+                "{} has reference {} without an entry",
+                path.display(),
+                reference.key
+            );
+        }
+        if !keys.insert(reference.key.as_str()) {
+            bail!(
+                "{} has a duplicate reference key: {}",
+                path.display(),
+                reference.key
+            );
+        }
+    }
+
+    Ok(())
+}
+
+fn resolve_citations(markdown: &str, references: &[Reference], path: &Path) -> Result<String> {
+    if references.is_empty() || !markdown.contains("[@") {
+        return Ok(markdown.to_string());
+    }
+
+    let references_by_key: HashMap<&str, &Reference> = references
+        .iter()
+        .map(|reference| (reference.key.as_str(), reference))
+        .collect();
+    let mut output = String::with_capacity(markdown.len());
+    let mut offset = 0;
+
+    while let Some(start_relative) = markdown[offset..].find("[@") {
+        let start = offset + start_relative;
+        output.push_str(&markdown[offset..start]);
+
+        let content_start = start + 1;
+        let Some(end_relative) = markdown[content_start..].find(']') else {
+            output.push_str(&markdown[start..]);
+            return Ok(output);
+        };
+        let end = content_start + end_relative;
+        let content = &markdown[content_start..end];
+
+        output.push_str(&render_citation_group(content, &references_by_key, path)?);
+        offset = end + 1;
+    }
+
+    output.push_str(&markdown[offset..]);
+    Ok(output)
+}
+
+fn render_citation_group(
+    content: &str,
+    references_by_key: &HashMap<&str, &Reference>,
+    path: &Path,
+) -> Result<String> {
+    let mut html = String::new();
+    html.push('(');
+    for (index, part) in content.split(';').enumerate() {
+        let key = part.trim().strip_prefix('@').with_context(|| {
+            format!(
+                "{} has an invalid citation group: [{}]",
+                path.display(),
+                content
+            )
+        })?;
+        if !is_reference_key(key) {
+            bail!("{} has an invalid citation key: {}", path.display(), key);
+        }
+        let reference = references_by_key
+            .get(key)
+            .with_context(|| format!("{} cites unknown reference: {}", path.display(), key))?;
+
+        if index > 0 {
+            html.push_str("; ");
+        }
+        html.push_str(&format!(
+            "<a class=\"citation-link\" href=\"#{}\">{}</a>",
+            escape_attr(&reference_id(key)),
+            escape_html(&reference.citation)
+        ));
+    }
+    html.push(')');
+    Ok(html)
+}
+
+fn render_references(references: &[Reference]) -> String {
+    if references.is_empty() {
+        return String::new();
+    }
+
+    let mut html = String::new();
+    html.push_str("<h2 id=\"references\" class=\"references-title\">References</h2>\n");
+    html.push_str("<div class=\"references\">\n");
+    for reference in references {
+        html.push_str(&format!(
+            "  <p id=\"{}\">{}</p>\n",
+            escape_attr(&reference_id(&reference.key)),
+            render_reference_entry(&reference.entry)
+        ));
+    }
+    html.push_str("</div>\n");
+    html
+}
+
+fn render_reference_entry(entry: &str) -> String {
+    let rendered = render_markdown(entry.trim());
+    rendered
+        .trim()
+        .strip_prefix("<p>")
+        .and_then(|inner| inner.strip_suffix("</p>"))
+        .unwrap_or(rendered.trim())
+        .to_string()
+}
+
+fn reference_id(key: &str) -> String {
+    format!("ref-{key}")
+}
+
+fn is_reference_key(key: &str) -> bool {
+    !key.is_empty()
+        && key
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
 }
 
 fn load_markdown_html(path: &Path) -> Result<String> {
@@ -883,6 +1043,10 @@ fn format_date(date: NaiveDate) -> String {
         month_name(date.month()),
         date.year()
     )
+}
+
+fn format_month_year(date: NaiveDate) -> String {
+    format!("{}, {}", month_name(date.month()), date.year())
 }
 
 fn month_name(month: u32) -> &'static str {
