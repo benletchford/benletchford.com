@@ -1,4 +1,4 @@
-- [systemless](https://github.com/benletchford/systemless) - ROM-free classic Mac high-level emulator and runtime, in Rust.
+- [systemless](https://systemless.org/) - ROM-free classic Mac high-level emulator and runtime, in Rust.
 - [m68k-rs](https://github.com/benletchford/m68k-rs) - Safe, pure-Rust implementation of the Motorola 68000 CPU family.
-- [stratego.io](https://github.com/benletchford/stratego.io) - Multiplayer HTML5 recreation of Stratego as a Rust web app.
+- [stratego.io](https://stratego.io/) - Multiplayer HTML5 recreation of Stratego as a Rust web app.
 - [stuffit-rs](https://github.com/benletchford/stuffit-rs) - Read and write StuffIt archives from Rust.

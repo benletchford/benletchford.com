@@ -159,6 +159,52 @@ A-line traps, and modelling the runtime surfaces interactive software expects:
 memory, resources, segments, files, drawing, events, windows, menus, dialogs,
 sound, and the small details in between.
 
+At a very high level, the shape is something like this. The 68k interpreter
+steps through guest instructions until it sees an A-line opcode. Instead of
+jumping into a Macintosh ROM, Systemless decodes the trap and implements the
+Toolbox contract in Rust:
+
+```rust
+fn step(cpu: &mut Cpu, system: &mut Systemless) -> Result<()> {
+    let opcode = system.memory.read_u16(cpu.pc())?;
+
+    if opcode & 0xf000 == 0xa000 {
+        cpu.advance_pc(2);
+        return system.dispatch_trap(Trap::from_opcode(opcode), cpu);
+    }
+
+    cpu.execute_68k_instruction(opcode, &mut system.memory)
+}
+
+impl Systemless {
+    fn dispatch_trap(&mut self, trap: Trap, cpu: &mut Cpu) -> Result<()> {
+        match trap {
+            Trap::TickCount => {
+                cpu.d0 = self.clock.ticks_since_boot();
+            }
+            Trap::GetResource { kind, id } => {
+                let handle = self.resources.load(kind, id, &mut self.memory)?;
+                cpu.a0 = handle.address();
+            }
+            Trap::DrawString { text_ptr } => {
+                let text = self.memory.read_pascal_string(text_ptr)?;
+                self.quickdraw.draw_string(&text)?;
+            }
+            Trap::Unknown(opcode) => {
+                return Err(Error::UnimplementedTrap(opcode));
+            }
+        }
+
+        Ok(())
+    }
+}
+```
+
+The real runtime has much more bookkeeping around registers, memory handles,
+Pascal calling conventions, resource maps, and drawing state. But the central
+idea is that a ROM routine becomes an explicit Rust function with the same
+guest-visible behaviour.
+
 It is not trying to be a perfect hardware museum. Cycle-accurate emulation is
 important, and full emulators will always matter [@kaltman-2025]. Systemless
 aims at a different layer: the guest-visible behaviour that makes the software
