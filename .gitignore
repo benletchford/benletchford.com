@@ -1,0 +1,6 @@
+/target/
+/dist/
+/node_modules/
+/.astro/
+/Ben Letchford - standalone.html
+.DS_Store
