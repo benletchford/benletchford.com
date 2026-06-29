@@ -439,6 +439,12 @@ body.article .back-link {
   text-align: left;
 }
 
+.article-body mjx-container[jax="CHTML"][display="true"] {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.15em 0;
+}
+
 .article-body code {
   font-family: "Computer Modern Typewriter", ui-monospace, SFMono-Regular, Menlo, Monaco,
     Consolas, monospace;

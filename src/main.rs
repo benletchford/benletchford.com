@@ -950,8 +950,33 @@ fn render_page(
             "{{ canonical_url }}",
             &escape_attr(&format!("{SITE_URL}{path}")),
         )
+        .replace("{{ math_head }}", render_math_head(content))
         .replace("{{ body_class }}", &escape_attr(body_class))
         .replace("{{ content }}", content)
+}
+
+fn render_math_head(content: &str) -> &'static str {
+    if !contains_latex_math(content) {
+        return "";
+    }
+
+    r#"<script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["$", "$"]],
+          displayMath: [["$$", "$$"]],
+          processEscapes: true
+        },
+        options: {
+          skipHtmlTags: ["script", "noscript", "style", "textarea", "pre", "code"]
+        }
+      };
+    </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>"#
+}
+
+fn contains_latex_math(content: &str) -> bool {
+    content.contains("$$")
 }
 
 fn push_section_title(body: &mut String, number: usize, id: &str, title: &str) {
