@@ -28,6 +28,12 @@ references:
       Goldwasser, S., & Micali, S. (1984). Probabilistic encryption. _Journal
       of Computer and System Sciences, 28_(2), 270-299.
       <https://doi.org/10.1016/0022-0000(84)90070-9>
+  - key: goldwasser-micali-rivest-1988
+    citation: "Goldwasser et al., 1988"
+    entry: >-
+      Goldwasser, S., Micali, S., & Rivest, R. L. (1988). A digital signature
+      scheme secure against adaptive chosen-message attacks. _SIAM Journal on
+      Computing, 17_(2), 281-308. <https://doi.org/10.1137/0217017>
   - key: goodfellow-2015
     citation: "Goodfellow et al., 2015"
     entry: >-
@@ -49,6 +55,11 @@ references:
       off-switch game. _Proceedings of the Twenty-Sixth International Joint
       Conference on Artificial Intelligence_, 220-227.
       <https://doi.org/10.24963/ijcai.2017/32>
+  - key: lecam-1986
+    citation: "Le Cam, 1986"
+    entry: >-
+      Le Cam, L. (1986). _Asymptotic methods in statistical decision theory_.
+      Springer. <https://doi.org/10.1007/978-1-4612-4946-7>
   - key: neyman-pearson-1933
     citation: "Neyman & Pearson, 1933"
     entry: >-
@@ -208,7 +219,9 @@ The channel induces two probability distributions over observations:
 
 The agent uses a policy $\pi$, where $\pi(x)$ is the probability that the agent
 terminates after seeing observation $x$. A deterministic policy is the special
-case where $\pi(x)$ is always 0 or 1.
+case where $\pi(x)$ is always 0 or 1. Call the policy _channel-only_ if the
+termination decision depends on nothing but $x$: no trusted hardware line, no
+out-of-band secret, no side channel unavailable to the adversary.
 
 We want two safety properties:
 
@@ -220,8 +233,10 @@ $$
 $$
 
 Completeness means the system shuts down when the evidence is real. Soundness
-means it does not shut down when the evidence is adversarial. A safe channel-only
-self-termination rule needs both $\varepsilon$ and $\delta$ to be small.
+means it does not shut down when the evidence is adversarial. The names are
+borrowed from proof systems, where they play the same roles: accept the true
+thing, reject the false one. A safe channel-only self-termination rule needs
+both $\varepsilon$ and $\delta$ to be small.
 
 Now define the total variation distance between the two observation
 distributions:
@@ -232,7 +247,8 @@ $$
 $$
 
 This is the largest possible gap, over all observable events $E$, between the
-probability of that event in the genuine world and the adversarial world. It is
+probability of that event in the genuine world and the adversarial world. For
+discrete observations it equals $\tfrac{1}{2} \sum_x |P_S(x) - P_A(x)|$. It is
 0 when the two worlds look identical through the channel. It is 1 when they are
 perfectly separable.
 
@@ -273,13 +289,26 @@ $$
 So if the channel makes real and fake evidence indistinguishable, the agent
 cannot be both reliable and secure. If it shuts down on the message in the real
 world, it also shuts down on the same message in the adversarial world. If it
-refuses the adversarial message, it also refuses the real one.
+refuses the adversarial message, it also refuses the real one. And the bound is
+tight in the most deflating way: a policy that ignores the message entirely,
+whether it always terminates, never terminates, or flips a coin, already
+achieves $\varepsilon + \delta = 1$. When the worlds coincide, the message
+contributes nothing.
+
+One more feature of the setup matters. $P_A$ is not fixed by nature. A capable
+adversary who knows the policy chooses what to send, which means the relevant
+separation is not against some average forgery but against the adversary's best
+imitation of genuine evidence. The design goal implied by the bound is to make
+that best imitation expensive or impossible, not merely to outscore the
+forgeries seen so far.
 
 ## Proof
 
-The proof is the same shape as the classical limit in binary hypothesis testing
-[@neyman-pearson-1933]. The action "terminate" is a test trying to distinguish
-$S$ from $A$.
+The proof is the same shape as the classical limits of binary hypothesis
+testing. Neyman and Pearson characterized the optimal test [@neyman-pearson-1933];
+the two-sided error bound used here is the one usually credited to Le Cam
+[@lecam-1986]. The action "terminate" is a test trying to distinguish $S$ from
+$A$.
 
 For a policy $\pi$, write:
 
@@ -297,6 +326,13 @@ $$
 \mathbb{E}_S[\pi(X)] - \mathbb{E}_A[\pi(X)]
   \le \operatorname{TV}(P_S, P_A).
 $$
+
+To see this in the discrete case, write the difference as
+$\sum_x \pi(x) \left( P_S(x) - P_A(x) \right)$. Since each $\pi(x) \le 1$, the
+sum is largest when $\pi$ puts full weight exactly on the points where
+$P_S(x) > P_A(x)$, and that maximum is
+$\sum_{x : P_S(x) > P_A(x)} \left( P_S(x) - P_A(x) \right)
+= \operatorname{TV}(P_S, P_A)$.
 
 The desired completeness and soundness conditions imply:
 
@@ -332,7 +368,10 @@ The bound applies to any policy whose decision depends only on observations
 from the channel. It applies to a neural network, a theorem prover, a Bayesian
 decision rule, a committee of models, or a superintelligent deliberator. Better
 reasoning can approximate the best test. It cannot beat the information present
-in the observation.
+in the observation: any computation the agent runs on $X$ is post-processing,
+and post-processing cannot increase the statistical distance between the two
+worlds. That is the data processing inequality wearing its testing clothes
+[@cover-thomas-2006].
 
 The same bound also applies to histories. If the agent receives a long transcript
 $H = (X_1, X_2, \ldots, X_n)$, replace $P_S$ and $P_A$ with distributions over
@@ -343,8 +382,9 @@ otherwise induce the same transcript distribution.
 ## The Bayesian version
 
 The same boundary appears if the agent thinks in posterior probabilities. Let
-$0 < q < 1$ be the prior probability that the shutdown evidence is genuine.
-After seeing $x$, Bayes' rule gives:
+$0 < q < 1$ be the prior probability that the shutdown evidence is genuine, and
+write $P_S(x)$ and $P_A(x)$ for the probability (or density) each world assigns
+to the observation. After seeing $x$, Bayes' rule gives:
 
 $$
 \Pr(S \mid x)
@@ -390,13 +430,20 @@ signature. Let the agent verify it. If the signature is valid, terminate.
 That can be the right engineering move. It also illustrates the framing theorem
 rather than refuting it.
 
-Modern cryptography treats indistinguishability as a central security concept:
-under appropriate assumptions, an adversary should not be able to distinguish
-or forge what the scheme protects [@goldwasser-micali-1984]. A signed shutdown
-channel can make $P_S$ and $P_A$ far apart, because valid signed commands and
-forgeries no longer look the same. In the bound, that means
-$\operatorname{TV}(P_S, P_A)$ is close to 1, so small $\varepsilon$ and small
-$\delta$ become possible.
+Modern cryptography made indistinguishability a central security concept for
+encryption [@goldwasser-micali-1984], and gave signatures the matching
+guarantee: under standard assumptions, an adversary cannot forge a valid
+signature on a new message, even after seeing signatures on messages of its
+choosing [@goldwasser-micali-rivest-1988]. A signed shutdown channel can make
+$P_S$ and $P_A$ far apart, because valid signed commands and forgeries no
+longer look the same. In the bound, that means $\operatorname{TV}(P_S, P_A)$ is
+close to 1, so small $\varepsilon$ and small $\delta$ become possible.
+
+Even then, a valid signature proves origin, not freshness. An adversary who has
+captured one legitimately signed shutdown order can replay it later, at a
+moment of its choosing, unless the protocol binds each command to a nonce,
+counter, or timestamp. Authentication narrows the attack surface; it does not
+close it by itself.
 
 But the trust anchor has to come from somewhere. The verifying key, the
 signature algorithm, the rule that says "this key is authorized to kill me,"
