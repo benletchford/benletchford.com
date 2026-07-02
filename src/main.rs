@@ -5,8 +5,6 @@ use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
     env, fs,
-    io::{Read, Write},
-    net::{TcpListener, TcpStream},
     path::{Path, PathBuf},
 };
 use walkdir::WalkDir;
@@ -14,53 +12,36 @@ use walkdir::WalkDir;
 const SITE_URL: &str = "https://benletchford.com";
 const AUTHOR: &str = "Ben Letchford";
 const BASE_TEMPLATE: &str = include_str!("../templates/base.html");
-const SITE_CSS: &str = include_str!("../static/styles.css");
 
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().skip(1).collect();
-    match parse_args(&args)? {
-        Command::Build { out_dir } => {
-            build_site(&out_dir)?;
-            println!("Built {}", out_dir.display());
-        }
-        Command::Dev {
-            out_dir,
-            host,
-            port,
-        } => serve_dev(&out_dir, &host, port)?,
-    }
+    let Command::Render { out_dir } = parse_args(&args)?;
+    render_site(&out_dir)?;
+    println!("Rendered {}", out_dir.display());
 
     Ok(())
 }
 
-fn build_site(out_dir: &Path) -> Result<()> {
+fn render_site(out_dir: &Path) -> Result<()> {
     let site = Site::load(Path::new("."))?;
-    site.build(out_dir)?;
+    site.render(out_dir)?;
     Ok(())
 }
 
 enum Command {
-    Build {
-        out_dir: PathBuf,
-    },
-    Dev {
-        out_dir: PathBuf,
-        host: String,
-        port: u16,
-    },
+    Render { out_dir: PathBuf },
 }
 
 fn parse_args(args: &[String]) -> Result<Command> {
-    if args.is_empty() {
-        return Ok(Command::Build {
-            out_dir: PathBuf::from("dist"),
-        });
+    let mut out_dir = PathBuf::from("dist");
+    let mut i = 1;
+
+    if args.first().map(String::as_str) != Some("render") {
+        bail!(
+            "usage: cargo run -- render [--out dist]\n       use `trunk build` or `trunk serve` for the site workflow"
+        );
     }
 
-    let mut out_dir = PathBuf::from("dist");
-    let mut host = "127.0.0.1".to_string();
-    let mut port = 8000;
-    let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
             "--out" => {
@@ -70,34 +51,11 @@ fn parse_args(args: &[String]) -> Result<Command> {
                 out_dir = PathBuf::from(value);
                 i += 2;
             }
-            "--host" => {
-                host = args
-                    .get(i + 1)
-                    .context("--host requires an address argument")?
-                    .to_string();
-                i += 2;
-            }
-            "--port" => {
-                port = args
-                    .get(i + 1)
-                    .context("--port requires a port argument")?
-                    .parse()
-                    .context("parsing --port")?;
-                i += 2;
-            }
             other => bail!("unknown argument: {other}"),
         }
     }
 
-    match args[0].as_str() {
-        "build" => Ok(Command::Build { out_dir }),
-        "dev" => Ok(Command::Dev {
-            out_dir,
-            host,
-            port,
-        }),
-        _ => bail!("usage: cargo run -- build [--out dist]\n       cargo run -- dev [--out dist] [--host 127.0.0.1] [--port 8000]"),
-    }
+    Ok(Command::Render { out_dir })
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -144,20 +102,10 @@ impl Site {
         })
     }
 
-    fn build(&self, out_dir: &Path) -> Result<()> {
-        if out_dir.exists() {
-            fs::remove_dir_all(out_dir)
-                .with_context(|| format!("cleaning {}", out_dir.display()))?;
-        }
+    fn render(&self, out_dir: &Path) -> Result<()> {
         fs::create_dir_all(out_dir).with_context(|| format!("creating {}", out_dir.display()))?;
 
         write_file(out_dir.join(".nojekyll"), "")?;
-        write_file(out_dir.join("styles.css"), SITE_CSS)?;
-        copy_public(Path::new("public"), out_dir)?;
-        if Path::new("CNAME").exists() {
-            fs::copy("CNAME", out_dir.join("CNAME")).context("copying CNAME")?;
-        }
-
         write_file(out_dir.join("index.html"), self.render_home())?;
         self.write_collection(out_dir, Collection::Writing, &self.writing)?;
         write_file(out_dir.join("rss.xml"), self.render_rss())?;
@@ -699,201 +647,6 @@ fn load_markdown_html(path: &Path) -> Result<String> {
     Ok(render_markdown(markdown.trim_start_matches('\n')))
 }
 
-fn serve_dev(out_dir: &Path, host: &str, port: u16) -> Result<()> {
-    build_site(out_dir)?;
-
-    let address = format!("{host}:{port}");
-    let listener =
-        TcpListener::bind(&address).with_context(|| format!("binding dev server to {address}"))?;
-
-    println!("Serving http://{address}/");
-    println!("Refreshing a page rebuilds the site.");
-
-    for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
-                if let Err(error) = handle_dev_request(stream, out_dir) {
-                    eprintln!("dev server error: {error:#}");
-                }
-            }
-            Err(error) => eprintln!("dev server connection error: {error}"),
-        }
-    }
-
-    Ok(())
-}
-
-fn handle_dev_request(mut stream: TcpStream, out_dir: &Path) -> Result<()> {
-    let mut buffer = [0; 8192];
-    let bytes_read = stream.read(&mut buffer).context("reading HTTP request")?;
-    if bytes_read == 0 {
-        return Ok(());
-    }
-
-    let request = String::from_utf8_lossy(&buffer[..bytes_read]);
-    let Some(first_line) = request.lines().next() else {
-        return Ok(());
-    };
-    let mut parts = first_line.split_whitespace();
-    let method = parts.next().unwrap_or_default();
-    let target = parts.next().unwrap_or("/");
-
-    if method != "GET" && method != "HEAD" {
-        return send_response(
-            &mut stream,
-            "405 Method Not Allowed",
-            "text/plain; charset=utf-8",
-            b"Method not allowed\n",
-            method != "HEAD",
-        );
-    }
-
-    if let Err(error) = build_site(out_dir) {
-        let body = format!("Build failed:\n{error:#}\n");
-        return send_response(
-            &mut stream,
-            "500 Internal Server Error",
-            "text/plain; charset=utf-8",
-            body.as_bytes(),
-            method != "HEAD",
-        );
-    }
-
-    let Some(path) = resolve_request_path(out_dir, target) else {
-        return send_response(
-            &mut stream,
-            "400 Bad Request",
-            "text/plain; charset=utf-8",
-            b"Bad request\n",
-            method != "HEAD",
-        );
-    };
-
-    let body = match fs::read(&path) {
-        Ok(body) => body,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return send_response(
-                &mut stream,
-                "404 Not Found",
-                "text/plain; charset=utf-8",
-                b"Not found\n",
-                method != "HEAD",
-            );
-        }
-        Err(error) => return Err(error).with_context(|| format!("reading {}", path.display())),
-    };
-
-    send_response(
-        &mut stream,
-        "200 OK",
-        content_type(&path),
-        &body,
-        method != "HEAD",
-    )
-}
-
-fn resolve_request_path(root: &Path, target: &str) -> Option<PathBuf> {
-    let path = target.split('?').next().unwrap_or("/");
-    let path = path.trim_start_matches('/');
-    let path = percent_decode(path)?;
-
-    let mut resolved = root.to_path_buf();
-    if path.is_empty() {
-        resolved.push("index.html");
-        return Some(resolved);
-    }
-
-    for segment in path.split('/') {
-        if segment.is_empty() || segment == "." {
-            continue;
-        }
-        if segment == ".." || segment.contains('\\') {
-            return None;
-        }
-        resolved.push(segment);
-    }
-
-    if resolved.is_dir() {
-        resolved.push("index.html");
-    } else if resolved.extension().is_none() {
-        let index = resolved.join("index.html");
-        if index.exists() {
-            resolved = index;
-        }
-    }
-
-    Some(resolved)
-}
-
-fn percent_decode(input: &str) -> Option<String> {
-    let bytes = input.as_bytes();
-    let mut decoded = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-
-    while i < bytes.len() {
-        if bytes[i] == b'%' {
-            let high = hex_value(*bytes.get(i + 1)?)?;
-            let low = hex_value(*bytes.get(i + 2)?)?;
-            decoded.push(high << 4 | low);
-            i += 3;
-        } else {
-            decoded.push(bytes[i]);
-            i += 1;
-        }
-    }
-
-    String::from_utf8(decoded).ok()
-}
-
-fn hex_value(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        b'A'..=b'F' => Some(byte - b'A' + 10),
-        _ => None,
-    }
-}
-
-fn send_response(
-    stream: &mut TcpStream,
-    status: &str,
-    content_type: &str,
-    body: &[u8],
-    include_body: bool,
-) -> Result<()> {
-    write!(
-        stream,
-        "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        body.len()
-    )
-    .context("writing HTTP response headers")?;
-
-    if include_body {
-        stream
-            .write_all(body)
-            .context("writing HTTP response body")?;
-    }
-
-    Ok(())
-}
-
-fn content_type(path: &Path) -> &'static str {
-    match path.extension().and_then(|extension| extension.to_str()) {
-        Some("css") => "text/css; charset=utf-8",
-        Some("html") => "text/html; charset=utf-8",
-        Some("js") => "text/javascript; charset=utf-8",
-        Some("json") => "application/json; charset=utf-8",
-        Some("png") => "image/png",
-        Some("svg") => "image/svg+xml",
-        Some("ttf") => "font/ttf",
-        Some("txt") => "text/plain; charset=utf-8",
-        Some("woff") => "font/woff",
-        Some("woff2") => "font/woff2",
-        Some("xml") => "application/xml; charset=utf-8",
-        _ => "application/octet-stream",
-    }
-}
-
 fn read_markdown_with_front_matter<T>(path: &Path) -> Result<(T, String)>
 where
     T: for<'de> Deserialize<'de>,
@@ -1097,27 +850,6 @@ fn write_file(path: PathBuf, contents: impl AsRef<[u8]>) -> Result<()> {
         fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
     }
     fs::write(&path, contents).with_context(|| format!("writing {}", path.display()))
-}
-
-fn copy_public(public_dir: &Path, out_dir: &Path) -> Result<()> {
-    if !public_dir.exists() {
-        return Ok(());
-    }
-
-    for item in WalkDir::new(public_dir).into_iter().filter_map(Result::ok) {
-        if !item.file_type().is_file() {
-            continue;
-        }
-        let relative = item.path().strip_prefix(public_dir)?;
-        let target = out_dir.join(relative);
-        if let Some(parent) = target.parent() {
-            fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
-        }
-        fs::copy(item.path(), &target).with_context(|| {
-            format!("copying {} to {}", item.path().display(), target.display())
-        })?;
-    }
-    Ok(())
 }
 
 fn escape_html(input: &str) -> String {

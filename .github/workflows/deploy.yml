@@ -28,8 +28,13 @@ jobs:
           rustup toolchain install stable --profile minimal
           rustup default stable
 
+      - name: Install Trunk
+        run: cargo install --locked trunk --version 0.21.14
+
       - name: Build site
-        run: cargo run --release -- build
+        run: trunk build --release --locked
+        env:
+          NO_COLOR: "false"
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

@@ -1,0 +1,32 @@
+trunk-version = ">=0.21.14"
+
+[build]
+target = "trunk/index.html"
+dist = "dist"
+public_url = "/"
+filehash = false
+minify = "never"
+
+[watch]
+watch = [
+  "Cargo.lock",
+  "Cargo.toml",
+  "CNAME",
+  "content",
+  "public",
+  "src",
+  "static",
+  "templates",
+  "trunk",
+]
+ignore = ["dist", "target"]
+
+[serve]
+addresses = ["127.0.0.1"]
+port = 8000
+no_spa = true
+
+[[hooks]]
+stage = "post_build"
+command = "sh"
+command_arguments = ["-c", "cargo run --locked --quiet -- render --out \"$TRUNK_STAGING_DIR\""]

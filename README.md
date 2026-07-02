@@ -1,6 +1,6 @@
 # benletchford.com
 
-Static personal site built from markdown with a small Rust generator.
+Static personal site built from Markdown with Trunk and a small Rust renderer.
 
 ## Writing
 
@@ -32,22 +32,24 @@ Selected Work is a simple markdown list in `content/projects.md`:
 ## Build
 
 ```sh
-cargo run -- build
+cargo install --locked trunk --version 0.21.14
+trunk build --release
 ```
 
-The generated site is written to `dist/`. GitHub Actions builds the same output
-and deploys it to GitHub Pages on pushes to `master` or `main`.
+The generated site is written to `dist/`. Trunk copies static assets, runs the
+Rust renderer as a build hook, and GitHub Actions deploys the same output to
+GitHub Pages on pushes to `master` or `main`.
 
 ## Dev Server
 
 ```sh
-cargo run -- dev
+trunk serve
 ```
 
 The dev server builds into `dist/`, serves `http://127.0.0.1:8000/`, and
-rebuilds the site whenever a page is refreshed. Use `--port` to choose another
+rebuilds the site when watched files change. Use `--port` to choose another
 port:
 
 ```sh
-cargo run -- dev --port 8080
+trunk serve --port 8080
 ```
